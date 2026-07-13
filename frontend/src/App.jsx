@@ -4,7 +4,7 @@ function App() {
   const [response, setResponse] = useState(null);
 
   const callBackend = async () => {
-    const res = await fetch("http://localhost:3000/api");
+    const res = await fetch("/api");
     const data = await res.json();
     setResponse(data);
   };
