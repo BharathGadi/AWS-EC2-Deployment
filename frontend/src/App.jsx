@@ -11,7 +11,7 @@ function App() {
 
   return (
     <div style={{ padding: 40 }}>
-      <h1>AWS CI/CD is Working 🚀 Again Edited</h1>
+      <h1>AWS CI/CD Cloudfront + S3</h1>
 
       <button onClick={callBackend}>Call Backend</button>
 
