@@ -6,6 +6,196 @@ app.use(cors());
 
 const PORT = 3000;
 
+// 1. Replace your existing cors middleware (around line 5) with this:
+app.use(
+  cors({
+    origin: "http://localhost:5173", // Specific origin is REQUIRED when using credentials
+    credentials: true,               // Crucial: allows browsers to send/receive cookies
+  })
+);
+
+// 2. Add these routes at the bottom of backend/server.js (before app.listen)
+// ----------------------------------------------------
+// 🍪 MODULE 1: COOKIE BASICS
+// ----------------------------------------------------
+
+// Endpoint to set a cookie
+app.get("/api/cookies/set", (req, res) => {
+  // Set-Cookie is standard HTTP response header. 
+  // We set a cookie named 'user_tracker' with value 'interview_seeker_99'
+  res.setHeader("Set-Cookie", "user_tracker=interview_seeker_99; Path=/; SameSite=Lax");
+  
+  res.json({
+    success: true,
+    message: "Cookie 'user_tracker' has been set in your browser!",
+  });
+});
+
+// Endpoint to read the incoming cookies (Manual parsing is a common coding interview task!)
+app.get("/api/cookies/get", (req, res) => {
+  const rawCookieHeader = req.headers.cookie; // Raw format: "cookie1=val1; cookie2=val2"
+  
+  console.log("Raw Cookie Header Received:", rawCookieHeader);
+
+  // Manual Cookie Parser (Highly asked in interviews)
+  const parsedCookies = {};
+  if (rawCookieHeader) {
+    rawCookieHeader.split(";").forEach((cookie) => {
+      const parts = cookie.split("=");
+      const name = parts[0].trim();
+      const value = parts.slice(1).join("="); // Handle values containing "="
+      parsedCookies[name] = decodeURIComponent(value);
+    });
+  }
+
+  res.json({
+    success: true,
+    rawHeader: rawCookieHeader || "No cookies sent",
+    parsedCookies: parsedCookies,
+  });
+});
+
+// Endpoint to clear the cookie
+app.get("/api/cookies/clear", (req, res) => {
+  // To delete a cookie, the server tells the browser to set its expiration date in the past
+  res.setHeader(
+    "Set-Cookie",
+    "user_tracker=; Path=/; Expires=Thu, 01 Jan 1970 00:00:00 GMT; Max-Age=0"
+  );
+  
+  res.json({
+    success: true,
+    message: "Cookie 'user_tracker' cleared!",
+  });
+});
+// ----------------------------------------------------
+// 🔒 MODULE 2: COOKIE SECURITY ATTRIBUTES
+// ----------------------------------------------------
+
+// 1. Unsafe Cookie (No HttpOnly flag - readable by client JavaScript document.cookie)
+app.get("/api/cookies/security/unsafe", (req, res) => {
+  res.setHeader("Set-Cookie", "cookie_unsafe=hack_me_via_js; Path=/; SameSite=Lax");
+  res.json({
+    success: true,
+    message: "Set unsafe cookie! Check your JavaScript console / document.cookie.",
+  });
+});
+
+// 2. HttpOnly Cookie (Safe from client-side JavaScript access / XSS scripts)
+app.get("/api/cookies/security/httponly", (req, res) => {
+  res.setHeader(
+    "Set-Cookie",
+    "cookie_secure_httponly=hidden_from_js_xss; Path=/; HttpOnly; SameSite=Lax"
+  );
+  res.json({
+    success: true,
+    message: "Set HttpOnly cookie! Try reading it via document.cookie—it will not be visible.",
+  });
+});
+
+// 3. SameSite Strict Cookie (Will not be sent on cross-origin link clicks or forms)
+app.get("/api/cookies/security/samesite", (req, res) => {
+  res.setHeader(
+    "Set-Cookie",
+    "cookie_samesite_strict=only_my_domain_requests; Path=/; SameSite=Strict"
+  );
+  res.json({
+    success: true,
+    message: "Set SameSite=Strict cookie! This cookie will only be sent on requests originating directly from this site.",
+  });
+});
+
+// Clear all security demonstration cookies
+app.get("/api/cookies/security/clear", (req, res) => {
+  res.setHeader("Set-Cookie", [
+    "cookie_unsafe=; Path=/; Max-Age=0; Expires=Thu, 01 Jan 1970 00:00:00 GMT",
+    "cookie_secure_httponly=; Path=/; Max-Age=0; Expires=Thu, 01 Jan 1970 00:00:00 GMT; HttpOnly",
+    "cookie_samesite_strict=; Path=/; Max-Age=0; Expires=Thu, 01 Jan 1970 00:00:00 GMT"
+  ]);
+  res.json({
+    success: true,
+    message: "All security demonstration cookies cleared!",
+  });
+});
+
+// ----------------------------------------------------
+// 🕒 MODULE 3: COOKIE LIFESPANS & SCOPING
+// ----------------------------------------------------
+
+// A. Set a Session Cookie (Stored in RAM, deleted when browser/tab closes)
+app.get("/api/cookies/lifespan/session", (req, res) => {
+  // Notice we omit Expires and Max-Age
+  res.setHeader("Set-Cookie", "cookie_session=i_live_in_ram; Path=/; SameSite=Lax");
+  res.json({
+    success: true,
+    message: "Set Session Cookie (RAM storage). Check your Application Tab!",
+  });
+});
+
+// B. Set a Persistent Cookie using Max-Age (Expires relatively in 60 seconds)
+app.get("/api/cookies/lifespan/persistent", (req, res) => {
+  res.setHeader(
+    "Set-Cookie",
+    "cookie_persistent=i_live_on_disk_60s; Max-Age=60; Path=/; SameSite=Lax"
+  );
+  res.json({
+    success: true,
+    message: "Set Persistent Cookie using Max-Age (Expires in 60s).",
+  });
+});
+
+// C. Set a Persistent Cookie using Expires (Expires absolutely in 2 minutes)
+app.get("/api/cookies/lifespan/expires", (req, res) => {
+  const expiryDate = new Date();
+  expiryDate.setMinutes(expiryDate.getMinutes() + 2); // 2 minutes from now
+  const expiresGMTString = expiryDate.toUTCString();  // absolute RFC 1123 format
+
+  res.setHeader(
+    "Set-Cookie",
+    `cookie_expires=i_use_absolute_time; Expires=${expiresGMTString}; Path=/; SameSite=Lax`
+  );
+  res.json({
+    success: true,
+    message: `Set Persistent Cookie using Expires attribute. Expiration: ${expiresGMTString}`,
+  });
+});
+
+// D. Set a Path-Scoped Cookie (Only sent to matching subpaths)
+app.get("/api/cookies/lifespan/path-scoped", (req, res) => {
+  // Restricting path to '/api/cookies/lifespan/special'
+  res.setHeader(
+    "Set-Cookie",
+    "cookie_path_scoped=restricted_access; Path=/api/cookies/lifespan/special; SameSite=Lax"
+  );
+  res.json({
+    success: true,
+    message: "Set Path-Scoped Cookie! Bound strictly to path: /api/cookies/lifespan/special",
+  });
+});
+
+// E. Special endpoint inside the scoped path to verify cookie receipt
+app.get("/api/cookies/lifespan/special/test", (req, res) => {
+  res.json({
+    success: true,
+    message: "Requested /api/cookies/lifespan/special/test",
+    cookiesReceived: req.headers.cookie || "No cookies received at this path",
+  });
+});
+
+// F. Clear Module 3 demonstration cookies
+app.get("/api/cookies/lifespan/clear", (req, res) => {
+  res.setHeader("Set-Cookie", [
+    "cookie_session=; Path=/; Max-Age=0; Expires=Thu, 01 Jan 1970 00:00:00 GMT",
+    "cookie_persistent=; Path=/; Max-Age=0; Expires=Thu, 01 Jan 1970 00:00:00 GMT",
+    "cookie_expires=; Path=/; Max-Age=0; Expires=Thu, 01 Jan 1970 00:00:00 GMT",
+    "cookie_path_scoped=; Path=/api/cookies/lifespan/special; Max-Age=0; Expires=Thu, 01 Jan 1970 00:00:00 GMT"
+  ]);
+  res.json({
+    success: true,
+    message: "Module 3 cookies cleared!",
+  });
+});
+
 // Home route
 app.get("/", (req, res) => {
   res.json({
